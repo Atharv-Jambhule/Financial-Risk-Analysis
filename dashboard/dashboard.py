@@ -1,25 +1,25 @@
 import streamlit as st
 import requests
-import pandas as pd
-import matplotlib.pyplot as plt
+import plotly.express as px
 
 st.set_page_config(layout="wide")
 
-st.title(" Finance Risk Intelligence Dashboard")
+st.title("💰 Financial Risk Intelligence Dashboard")
 
-# INPUT PANEL
-
+# -------------------- INPUTS --------------------
 st.sidebar.header("🔍 Input Parameters")
 
-quantity = st.sidebar.slider("Quantity", 1, 500, 10)
-price = st.sidebar.slider("Unit Price", 1.0, 200.0, 2.5)
+quantity = st.sidebar.slider("Quantity", 1, 500, 50)
+price = st.sidebar.slider("Unit Price", 1.0, 200.0, 20.0)
 year = st.sidebar.selectbox("Year", [2010, 2011])
-month = st.sidebar.slider("Month", 1, 12, 5)
-quarter = st.sidebar.selectbox("Quarter", [1,2,3,4])
-country = st.sidebar.selectbox("Country UK?", [0,1])
+month = st.sidebar.slider("Month", 1, 12, 6)
+quarter = st.sidebar.selectbox("Quarter", [1, 2, 3, 4])
+country = st.sidebar.selectbox("Country UK?", [0, 1])
 
-# API CALL
-if st.sidebar.button("Predict Risk"):
+# 🔗 YOUR API URL
+url = "http://51.21.196.62/api/predict"
+# -------------------- BUTTON --------------------
+if st.sidebar.button("Analyze Products"):
 
     data = {
         "Quantity": quantity,
@@ -31,76 +31,129 @@ if st.sidebar.button("Predict Risk"):
     }
 
     try:
-        url = "http://13.51.204.143:5000/predict"   
-        response = requests.post(url, json=data, timeout=5)
-        result = response.json()
+        response = requests.post(url, json=data)
 
-        col1, col2, col3 = st.columns(3)
+        if response.status_code != 200:
+            st.error(f"API Error: {response.text}")
+        else:
+            result = response.json()
 
-        col1.metric("Risk Level", result["risk"])
-        col2.metric("Confidence", result["confidence"])
-        col3.metric("Prediction", result["prediction"])
+            st.success("Analysis Complete 🚀")
 
-    except:
-        st.error("!! API not reachable. Make sure AWS server is running.")
+            low = result.get("Low Risk", [])
+            medium = result.get("Medium Risk", [])
+            high = result.get("High Risk", [])
 
-# REAL DATA VISUALIZATION
-st.header("📊 Business Insights")
+            all_data = low + medium + high
 
-# Load dataset
-df = pd.read_csv("../data/BDA_SEM-4.csv")
+            # -------------------- ALERTS --------------------
+            for item in high:
+                if any(k in item["product"].upper() for k in ["AMAZON", "FEE", "CHARGE", "POSTAGE"]):
+                    st.error(f"🚨 Critical Risk: {item['product']} ({item['score']})")
 
-# Feature Engineering
-df["InvoiceDate"] = pd.to_datetime(df["InvoiceDate"])
-df["MonthNumber"] = df["InvoiceDate"].dt.month
-df["Revenue"] = df["Quantity"] * df["UnitPrice"]
+            # -------------------- KPI METRICS --------------------
+            st.subheader("📌 Key Insights")
 
-# Revenue Trend
-st.subheader("📈 Revenue Trend")
+            col1, col2, col3 = st.columns(3)
 
-rev = df.groupby("MonthNumber")["Revenue"].sum()
+            total_products = len(all_data)
+            highest_score = max([p["score"] for p in all_data]) if all_data else 0
+            avg_score = round(
+                sum(p["score"] for p in all_data) / max(len(all_data), 1), 2
+            )
 
-fig1, ax1 = plt.subplots()
-ax1.plot(rev.index, rev.values)
-ax1.set_xlabel("Month")
-ax1.set_ylabel("Revenue")
-ax1.set_title("Monthly Revenue Trend")
+            col1.metric("Total Products", total_products)
+            col2.metric("Highest Risk Score", highest_score)
+            col3.metric("Average Risk Score", avg_score)
 
-st.pyplot(fig1)
+            # -------------------- DISPLAY PRODUCTS --------------------
+            def show_products(title, data):
+                st.subheader(title)
+                for p in data:
+                    st.write(f"📦 {p['product']}")
+                    st.progress(p["score"] / 100)
+                    st.caption(f"Risk Score: {p['score']}")
 
-# Country Analysis
-st.subheader("🌍 Revenue by Country")
+            col1, col2, col3 = st.columns(3)
 
-country_data = df.groupby("Country")["Revenue"].sum().sort_values(ascending=False).head(10)
+            with col1:
+                show_products("🟢 Low Risk", low)
 
-fig2, ax2 = plt.subplots()
-country_data.plot(kind='bar', ax=ax2)
-ax2.set_title("Top Countries by Revenue")
+            with col2:
+                show_products("🟡 Medium Risk", medium)
 
-st.pyplot(fig2)
+            with col3:
+                show_products("🔴 High Risk", high)
 
-# Risk Distribution
-st.subheader("⚠️ Risk Distribution")
+            # -------------------- PIE CHART --------------------
+            st.subheader("📊 Risk Distribution")
 
-df["LossFlag"] = (df["Revenue"] < 0).astype(int)
+            fig1 = px.pie(
+                names=["Low", "Medium", "High"],
+                values=[len(low), len(medium), len(high)],
+                hole=0.4
+            )
+            st.plotly_chart(fig1, use_container_width=True)
 
-risk = df["LossFlag"].value_counts()
+            # -------------------- TOP HIGH RISK BAR --------------------
+            st.subheader("📈 Top High Risk Products")
 
-fig3, ax3 = plt.subplots()
-risk.plot(kind='pie', autopct='%1.1f%%', ax=ax3)
-ax3.set_ylabel("")
+            if high:
+                fig2 = px.bar(
+                    x=[p["product"] for p in high],
+                    y=[p["score"] for p in high],
+                    labels={"x": "Product", "y": "Risk Score"}
+                )
+                st.plotly_chart(fig2, use_container_width=True)
 
-st.pyplot(fig3)
+            # -------------------- HISTOGRAM --------------------
+            st.subheader("📊 Risk Score Distribution")
 
-# Correlation Heatmap
-st.subheader("🔥 Feature Correlation")
+            if all_data:
+                fig3 = px.histogram(
+                    x=[p["score"] for p in all_data],
+                    nbins=15,
+                    labels={"x": "Risk Score", "y": "Frequency"}
+                )
+                st.plotly_chart(fig3, use_container_width=True)
 
-corr = df.select_dtypes(include='number').corr()
+            # -------------------- SCATTER --------------------
+            st.subheader("📉 Risk Clustering")
 
-fig4, ax4 = plt.subplots()
-cax = ax4.imshow(corr)
-fig4.colorbar(cax)
+            if all_data:
+                fig4 = px.scatter(
+                    x=list(range(len(all_data))),
+                    y=[p["score"] for p in all_data],
+                    color=[
+                        "Low" if p in low else "Medium" if p in medium else "High"
+                        for p in all_data
+                    ],
+                    labels={"x": "Product Index", "y": "Risk Score"}
+                )
+                st.plotly_chart(fig4, use_container_width=True)
 
-ax4.set_title("Correlation Heatmap")
+            # -------------------- TOP 10 OVERALL --------------------
+            st.subheader("🏆 Top 10 Risky Products (Overall)")
 
-st.pyplot(fig4)
+            top_all = sorted(all_data, key=lambda x: x["score"], reverse=True)[:10]
+
+            if top_all:
+                fig5 = px.bar(
+                    x=[p["product"] for p in top_all],
+                    y=[p["score"] for p in top_all],
+                    labels={"x": "Product", "y": "Risk Score"}
+                )
+                st.plotly_chart(fig5, use_container_width=True)
+
+            # -------------------- COMPARISON --------------------
+            st.subheader("📊 Risk Level Comparison")
+
+            fig6 = px.bar(
+                x=["Low", "Medium", "High"],
+                y=[len(low), len(medium), len(high)],
+                labels={"x": "Risk Category", "y": "Count"},
+            )
+            st.plotly_chart(fig6, use_container_width=True)
+
+    except Exception as e:
+        st.error(f"Error: {e}")
