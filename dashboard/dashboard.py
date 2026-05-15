@@ -17,7 +17,7 @@ quarter = st.sidebar.selectbox("Quarter", [1, 2, 3, 4])
 country = st.sidebar.selectbox("Country UK?", [0, 1])
 
 # 🔗 YOUR API URL
-url = "http://51.21.196.62/api/predict"
+url = "http://56.228.42.177/api/predict"
 # -------------------- BUTTON --------------------
 if st.sidebar.button("Analyze Products"):
 
