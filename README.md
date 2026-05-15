@@ -297,9 +297,6 @@ streamlit run dashboard.py --server.port 8503
 
 ---
 
-# 🎤 Viva Summary
-
-> Financial Risk Intelligence Dashboard is a cloud-deployed machine learning system that predicts and visualizes product-level financial risk using Flask APIs, Streamlit dashboards, AWS EC2, and Nginx reverse proxy architecture.
 
 ---
 
